@@ -112,6 +112,7 @@ func (s *store) Index() uint64 {
 // If recursive is true, it will return all the content under the node path.
 // If sorted is true, it will sort the content by keys.
 func (s *store) Get(nodePath string, recursive, sorted bool) (*Event, error) {
+	startTime := time.Now()
 	s.worldLock.RLock()
 	defer s.worldLock.RUnlock()
 
@@ -122,9 +123,9 @@ func (s *store) Get(nodePath string, recursive, sorted bool) (*Event, error) {
 	if err != nil {
 		s.Stats.Inc(GetFail)
 		if recursive {
-			ReportReadRequest(GetRecursive, Failure)
+			ReportReadRequest(GetRecursive, Failure, startTime)
 		} else {
-			ReportReadRequest(Get, Failure)
+			ReportReadRequest(Get, Failure, startTime)
 		}
 		return nil, err
 	}
@@ -135,9 +136,9 @@ func (s *store) Get(nodePath string, recursive, sorted bool) (*Event, error) {
 
 	s.Stats.Inc(GetSuccess)
 	if recursive {
-		ReportReadRequest(GetRecursive, Failure)
+		ReportReadRequest(GetRecursive, Failure, startTime)
 	} else {
-		ReportReadRequest(Get, Failure)
+		ReportReadRequest(Get, Failure, startTime)
 	}
 
 	return e, nil
@@ -147,18 +148,19 @@ func (s *store) Get(nodePath string, recursive, sorted bool) (*Event, error) {
 // If the node has already existed, create will fail.
 // If any node on the path is a file, create will fail.
 func (s *store) Create(nodePath string, dir bool, value string, unique bool, expireTime time.Time) (*Event, error) {
+	startTime := time.Now()
 	s.worldLock.Lock()
 	defer s.worldLock.Unlock()
-	e, err := s.internalCreate(nodePath, dir, value, unique, false, expireTime, Create)
+	e, err := s.internalCreate(nodePath, dir, value, unique, false, expireTime, Create, startTime)
 
 	if err == nil {
 		e.EtcdIndex = s.CurrentIndex
 		s.WatcherHub.notify(e)
 		s.Stats.Inc(CreateSuccess)
-		ReportWriteRequest(Create, Success)
+		ReportWriteRequest(Create, Success, startTime)
 	} else {
 		s.Stats.Inc(CreateFail)
-		ReportWriteRequest(Create, Failure)
+		ReportWriteRequest(Create, Failure, startTime)
 	}
 
 	return e, err
@@ -166,6 +168,7 @@ func (s *store) Create(nodePath string, dir bool, value string, unique bool, exp
 
 // Set creates or replace the node at nodePath.
 func (s *store) Set(nodePath string, dir bool, value string, expireTime time.Time) (*Event, error) {
+	startTime := time.Now()
 	var err error
 
 	s.worldLock.Lock()
@@ -174,10 +177,10 @@ func (s *store) Set(nodePath string, dir bool, value string, expireTime time.Tim
 	defer func() {
 		if err == nil {
 			s.Stats.Inc(SetSuccess)
-			ReportWriteRequest(Set, Success)
+			ReportWriteRequest(Set, Success, startTime)
 		} else {
 			s.Stats.Inc(SetFail)
-			ReportWriteRequest(Set, Failure)
+			ReportWriteRequest(Set, Failure, startTime)
 		}
 	}()
 
@@ -189,7 +192,7 @@ func (s *store) Set(nodePath string, dir bool, value string, expireTime time.Tim
 	}
 
 	// Set new value
-	e, err := s.internalCreate(nodePath, dir, value, false, true, expireTime, Set)
+	e, err := s.internalCreate(nodePath, dir, value, false, true, expireTime, Set, startTime)
 	if err != nil {
 		return nil, err
 	}
@@ -221,7 +224,7 @@ func getCompareFailCause(n *node, which int, prevValue string, prevIndex uint64)
 
 func (s *store) CompareAndSwap(nodePath string, prevValue string, prevIndex uint64,
 	value string, expireTime time.Time) (*Event, error) {
-
+	startTime := time.Now()
 	s.worldLock.Lock()
 	defer s.worldLock.Unlock()
 
@@ -235,13 +238,13 @@ func (s *store) CompareAndSwap(nodePath string, prevValue string, prevIndex uint
 
 	if err != nil {
 		s.Stats.Inc(CompareAndSwapFail)
-		ReportWriteRequest(CompareAndSwap, Failure)
+		ReportWriteRequest(CompareAndSwap, Failure, startTime)
 		return nil, err
 	}
 
 	if n.IsDir() { // can only compare and swap file
 		s.Stats.Inc(CompareAndSwapFail)
-		ReportWriteRequest(CompareAndSwap, Failure)
+		ReportWriteRequest(CompareAndSwap, Failure, startTime)
 		return nil, etcdErr.NewError(etcdErr.EcodeNotFile, nodePath, s.CurrentIndex)
 	}
 
@@ -250,7 +253,7 @@ func (s *store) CompareAndSwap(nodePath string, prevValue string, prevIndex uint
 	if ok, which := n.Compare(prevValue, prevIndex); !ok {
 		cause := getCompareFailCause(n, which, prevValue, prevIndex)
 		s.Stats.Inc(CompareAndSwapFail)
-		ReportWriteRequest(CompareAndSwap, Failure)
+		ReportWriteRequest(CompareAndSwap, Failure, startTime)
 		return nil, etcdErr.NewError(etcdErr.EcodeTestFailed, cause, s.CurrentIndex)
 	}
 
@@ -273,7 +276,7 @@ func (s *store) CompareAndSwap(nodePath string, prevValue string, prevIndex uint
 
 	s.WatcherHub.notify(e)
 	s.Stats.Inc(CompareAndSwapSuccess)
-	ReportWriteRequest(CompareAndSwap, Success)
+	ReportWriteRequest(CompareAndSwap, Success, startTime)
 
 	return e, nil
 }
@@ -281,6 +284,7 @@ func (s *store) CompareAndSwap(nodePath string, prevValue string, prevIndex uint
 // Delete deletes the node at the given path.
 // If the node is a directory, recursive must be true to delete it.
 func (s *store) Delete(nodePath string, dir, recursive bool) (*Event, error) {
+	startTime := time.Now()
 	s.worldLock.Lock()
 	defer s.worldLock.Unlock()
 
@@ -299,7 +303,7 @@ func (s *store) Delete(nodePath string, dir, recursive bool) (*Event, error) {
 
 	if err != nil { // if the node does not exist, return error
 		s.Stats.Inc(DeleteFail)
-		ReportWriteRequest(Delete, Failure)
+		ReportWriteRequest(Delete, Failure, startTime)
 		return nil, err
 	}
 
@@ -322,7 +326,7 @@ func (s *store) Delete(nodePath string, dir, recursive bool) (*Event, error) {
 
 	if err != nil {
 		s.Stats.Inc(DeleteFail)
-		ReportWriteRequest(Delete, Failure)
+		ReportWriteRequest(Delete, Failure, startTime)
 		return nil, err
 	}
 
@@ -332,12 +336,13 @@ func (s *store) Delete(nodePath string, dir, recursive bool) (*Event, error) {
 	s.WatcherHub.notify(e)
 
 	s.Stats.Inc(DeleteSuccess)
-	ReportWriteRequest(Delete, Success)
+	ReportWriteRequest(Delete, Success, startTime)
 
 	return e, nil
 }
 
 func (s *store) CompareAndDelete(nodePath string, prevValue string, prevIndex uint64) (*Event, error) {
+	startTime := time.Now()
 	nodePath = path.Clean(path.Join("/", nodePath))
 
 	s.worldLock.Lock()
@@ -347,13 +352,13 @@ func (s *store) CompareAndDelete(nodePath string, prevValue string, prevIndex ui
 
 	if err != nil { // if the node does not exist, return error
 		s.Stats.Inc(CompareAndDeleteFail)
-		ReportWriteRequest(CompareAndDelete, Failure)
+		ReportWriteRequest(CompareAndDelete, Failure, startTime)
 		return nil, err
 	}
 
 	if n.IsDir() { // can only compare and delete file
 		s.Stats.Inc(CompareAndSwapFail)
-		ReportWriteRequest(CompareAndDelete, Failure)
+		ReportWriteRequest(CompareAndDelete, Failure, startTime)
 		return nil, etcdErr.NewError(etcdErr.EcodeNotFile, nodePath, s.CurrentIndex)
 	}
 
@@ -362,7 +367,7 @@ func (s *store) CompareAndDelete(nodePath string, prevValue string, prevIndex ui
 	if ok, which := n.Compare(prevValue, prevIndex); !ok {
 		cause := getCompareFailCause(n, which, prevValue, prevIndex)
 		s.Stats.Inc(CompareAndDeleteFail)
-		ReportWriteRequest(CompareAndDelete, Failure)
+		ReportWriteRequest(CompareAndDelete, Failure, startTime)
 		return nil, etcdErr.NewError(etcdErr.EcodeTestFailed, cause, s.CurrentIndex)
 	}
 
@@ -385,7 +390,7 @@ func (s *store) CompareAndDelete(nodePath string, prevValue string, prevIndex ui
 
 	s.WatcherHub.notify(e)
 	s.Stats.Inc(CompareAndDeleteSuccess)
-	ReportWriteRequest(CompareAndDelete, Success)
+	ReportWriteRequest(CompareAndDelete, Success, startTime)
 
 	return e, nil
 }
@@ -433,6 +438,7 @@ func (s *store) walk(nodePath string, walkFunc func(prev *node, component string
 // If the node is a file, the value and the ttl can be updated.
 // If the node is a directory, only the ttl can be updated.
 func (s *store) Update(nodePath string, newValue string, expireTime time.Time) (*Event, error) {
+	startTime := time.Now()
 	s.worldLock.Lock()
 	defer s.worldLock.Unlock()
 
@@ -448,7 +454,7 @@ func (s *store) Update(nodePath string, newValue string, expireTime time.Time) (
 
 	if err != nil { // if the node does not exist, return error
 		s.Stats.Inc(UpdateFail)
-		ReportWriteRequest(Update, Failure)
+		ReportWriteRequest(Update, Failure, startTime)
 		return nil, err
 	}
 
@@ -460,7 +466,7 @@ func (s *store) Update(nodePath string, newValue string, expireTime time.Time) (
 	if n.IsDir() && len(newValue) != 0 {
 		// if the node is a directory, we cannot update value to non-empty
 		s.Stats.Inc(UpdateFail)
-		ReportWriteRequest(Update, Failure)
+		ReportWriteRequest(Update, Failure, startTime)
 		return nil, etcdErr.NewError(etcdErr.EcodeNotFile, nodePath, currIndex)
 	}
 
@@ -482,7 +488,7 @@ func (s *store) Update(nodePath string, newValue string, expireTime time.Time) (
 	s.WatcherHub.notify(e)
 
 	s.Stats.Inc(UpdateSuccess)
-	ReportWriteRequest(Update, Success)
+	ReportWriteRequest(Update, Success, startTime)
 
 	s.CurrentIndex = nextIndex
 
@@ -490,7 +496,7 @@ func (s *store) Update(nodePath string, newValue string, expireTime time.Time) (
 }
 
 func (s *store) internalCreate(nodePath string, dir bool, value string, unique, replace bool,
-	expireTime time.Time, action string) (*Event, error) {
+	expireTime time.Time, action string, startTime time.Time) (*Event, error) {
 
 	currIndex, nextIndex := s.CurrentIndex, s.CurrentIndex+1
 
@@ -518,7 +524,7 @@ func (s *store) internalCreate(nodePath string, dir bool, value string, unique, 
 
 	if err != nil {
 		s.Stats.Inc(SetFail)
-		ReportWriteRequest(Set, Failure)
+		ReportWriteRequest(action, Failure, startTime)
 		err.Index = currIndex
 		return nil, err
 	}
@@ -622,8 +628,6 @@ func (s *store) DeleteExpiredKeys(cutoff time.Time) {
 		node.Remove(true, true, callback)
 
 		s.Stats.Inc(ExpireCount)
-		ReportWriteRequest(Expire, Success)
-
 		s.WatcherHub.notify(e)
 	}
 

@@ -16,6 +16,7 @@ package store
 
 import (
 	"github.com/coreos/etcd/Godeps/_workspace/src/github.com/prometheus/client_golang/prometheus"
+	"time"
 )
 
 // Set of raw Prometheus metrics.
@@ -24,6 +25,7 @@ import (
 // * outcome = Outcome
 // Do not increment directly, use Report* methods.
 var (
+	latencyBucketInSeconds = prometheus.ExponentialBuckets(0.001, 2, 13)  // 0.001s to 8.192 sec
 
 	readCounter = prometheus.NewCounterVec(
 		prometheus.CounterOpts{
@@ -34,11 +36,12 @@ var (
 		}, []string{"type", "outcome"})
 
 	readHandlingTime = prometheus.NewHistogramVec(
-		prometheus.CounterOpts{
+		prometheus.HistogramOpts{
 			Namespace: "etcd",
 			Subsystem: "store",
 			Name:      "read_time_s",
-			Help:      "Bucketed histogram of read times by type (get/getRecursive), outcome (success/failure).",
+			Help:      "Bucketed histogram of read times (s) by type (get/getRecursive), outcome (success/failure).",
+			Buckets:   latencyBucketInSeconds,
 		}, []string{"type", "outcome"})
 
 	writeCounter = prometheus.NewCounterVec(
@@ -51,12 +54,13 @@ var (
 		}, []string{"type", "outcome"})
 
 	writeHandlingTime = prometheus.NewHistogramVec(
-		prometheus.CounterOpts{
+		prometheus.HistogramOpts{
 			Namespace: "etcd",
 			Subsystem: "store",
-			Name:      "read_time_s",
-			Help:      "Bucketed histogram  of writes by type " +
+			Name:      "write_time_s",
+			Help:      "Bucketed histogram of write times (s) by type " +
 			"(set/delete/update/create/compareAndSwap/compareAndDelete/expire) outcome(success/failure).",
+			Buckets:   latencyBucketInSeconds,
 		}, []string{"type", "outcome"})
 
 )
@@ -75,13 +79,16 @@ const (
 func init() {
 	prometheus.MustRegister(readCounter)
 	prometheus.MustRegister(writeCounter)
-
+	prometheus.MustRegister(readHandlingTime)
+	prometheus.MustRegister(writeHandlingTime)
 }
 
-func ReportReadRequest(read_type string, outcome Outcome, start_time Time) {
+func ReportReadRequest(read_type string, outcome Outcome, start_time time.Time) {
 	readCounter.WithLabelValues(read_type, string(outcome)).Inc()
+	readHandlingTime.WithLabelValues(read_type, string(outcome)).Observe(time.Since(start_time).Seconds())
 }
 
-func ReportWriteRequest(write_type string, outcome Outcome) {
+func ReportWriteRequest(write_type string, outcome Outcome, start_time time.Time) {
 	writeCounter.WithLabelValues(write_type, string(outcome)).Inc()
+	writeHandlingTime.WithLabelValues(write_type, string(outcome)).Observe(time.Since(start_time).Seconds())
 }
