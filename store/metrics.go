@@ -71,6 +71,21 @@ var (
 			Help:      "Counter of number of key expirations.",
 		})
 
+	watchRequests = prometheus.NewCounter(
+		prometheus.CounterOpts {
+			Namespace: "etcd",
+			Subsystem: "store",
+			Name:      "watch_requests",
+			Help:      "Counter of watch requests incoming into the system.",
+		})
+
+	watcherCount = prometheus.NewGauge(
+		prometheus.CounterOpts {
+			Namespace: "etcd",
+			Subsystem: "store",
+			Name:      "watchers",
+			Help:      "Number of active watchers.",
+		})
 )
 
 type Outcome string
@@ -103,4 +118,16 @@ func ReportWriteRequest(write_type string, outcome Outcome, start_time time.Time
 
 func ReportExpiredKey() {
 	expireCounter.Inc()
+}
+
+func ReportWatchRequest() {
+	watchRequests.Inc()
+}
+
+func ReportWatcherAdded() {
+	watcherCount.Inc()
+}
+
+func ReportWatcherRemoved() {
+	watcherCount.Dec()
 }
