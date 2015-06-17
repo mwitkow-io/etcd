@@ -151,6 +151,7 @@ func (wh *watcherHub) notifyWatchers(e *Event, nodePath string, deleted bool) {
 					w.removed = true
 					l.Remove(curr)
 					atomic.AddInt64(&wh.count, -1)
+					ReportWatcherRemoved()
 				}
 			}
 

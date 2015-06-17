@@ -59,7 +59,7 @@ var (
 			Subsystem: "store",
 			Name:      "write_time_s",
 			Help:      "Bucketed histogram of write times (s) by type " +
-			"(set/delete/update/create/compareAndSwap/compareAndDelete/expire) outcome(success/failure).",
+			"(set/delete/update/create/compareAndSwap/compareAndDelete/expire) outcome (success/failure).",
 			Buckets:   latencyBucketInSeconds,
 		}, []string{"type", "outcome"})
 
@@ -80,7 +80,7 @@ var (
 		})
 
 	watcherCount = prometheus.NewGauge(
-		prometheus.CounterOpts {
+		prometheus.GaugeOpts {
 			Namespace: "etcd",
 			Subsystem: "store",
 			Name:      "watchers",
@@ -104,6 +104,9 @@ func init() {
 	prometheus.MustRegister(writeCounter)
 	prometheus.MustRegister(readHandlingTime)
 	prometheus.MustRegister(writeHandlingTime)
+	prometheus.MustRegister(expireCounter)
+	prometheus.MustRegister(watchRequests)
+	prometheus.MustRegister(watcherCount)
 }
 
 func ReportReadRequest(read_type string, outcome Outcome, start_time time.Time) {
