@@ -25,23 +25,12 @@ import (
 // * outcome = Outcome
 // Do not increment directly, use Report* methods.
 var (
-	latencyBucketInSeconds = prometheus.ExponentialBuckets(0.001, 2, 13)  // 0.001s to 8.192 sec
-
 	readCounter = prometheus.NewCounterVec(
 		prometheus.CounterOpts{
 			Namespace: "etcd",
 			Subsystem: "store",
 			Name:      "reads",
 			Help:      "Counter of reads type by (get/getRecursive), outcome (success/failure).",
-		}, []string{"type", "outcome"})
-
-	readHandlingTime = prometheus.NewHistogramVec(
-		prometheus.HistogramOpts{
-			Namespace: "etcd",
-			Subsystem: "store",
-			Name:      "read_time_s",
-			Help:      "Bucketed histogram of read times (s) by type (get/getRecursive), outcome (success/failure).",
-			Buckets:   latencyBucketInSeconds,
 		}, []string{"type", "outcome"})
 
 	writeCounter = prometheus.NewCounterVec(
@@ -51,16 +40,6 @@ var (
 			Name:      "writes",
 			Help:      "Counter of writes by type (set/delete/update/create/compareAndSwap/compareAndDelete/expire) " +
 			"outcome(success/failure).",
-		}, []string{"type", "outcome"})
-
-	writeHandlingTime = prometheus.NewHistogramVec(
-		prometheus.HistogramOpts{
-			Namespace: "etcd",
-			Subsystem: "store",
-			Name:      "write_time_s",
-			Help:      "Bucketed histogram of write times (s) by type " +
-			"(set/delete/update/create/compareAndSwap/compareAndDelete/expire) outcome (success/failure).",
-			Buckets:   latencyBucketInSeconds,
 		}, []string{"type", "outcome"})
 
 	expireCounter = prometheus.NewCounter(
@@ -102,21 +81,17 @@ const (
 func init() {
 	prometheus.MustRegister(readCounter)
 	prometheus.MustRegister(writeCounter)
-	prometheus.MustRegister(readHandlingTime)
-	prometheus.MustRegister(writeHandlingTime)
 	prometheus.MustRegister(expireCounter)
 	prometheus.MustRegister(watchRequests)
 	prometheus.MustRegister(watcherCount)
 }
 
-func ReportReadRequest(read_type string, outcome Outcome, start_time time.Time) {
+func ReportReadRequest(read_type string, outcome Outcome) {
 	readCounter.WithLabelValues(read_type, string(outcome)).Inc()
-	readHandlingTime.WithLabelValues(read_type, string(outcome)).Observe(time.Since(start_time).Seconds())
 }
 
-func ReportWriteRequest(write_type string, outcome Outcome, start_time time.Time) {
+func ReportWriteRequest(write_type string, outcome Outcome) {
 	writeCounter.WithLabelValues(write_type, string(outcome)).Inc()
-	writeHandlingTime.WithLabelValues(write_type, string(outcome)).Observe(time.Since(start_time).Seconds())
 }
 
 func ReportExpiredKey() {
