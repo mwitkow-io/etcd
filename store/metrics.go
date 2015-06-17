@@ -63,6 +63,14 @@ var (
 			Buckets:   latencyBucketInSeconds,
 		}, []string{"type", "outcome"})
 
+	expireCounter = prometheus.NewCounter(
+		prometheus.CounterOpts {
+			Namespace: "etcd",
+			Subsystem: "store",
+			Name:      "expires",
+			Help:      "Counter of number of key expirations.",
+		})
+
 )
 
 type Outcome string
@@ -91,4 +99,8 @@ func ReportReadRequest(read_type string, outcome Outcome, start_time time.Time) 
 func ReportWriteRequest(write_type string, outcome Outcome, start_time time.Time) {
 	writeCounter.WithLabelValues(write_type, string(outcome)).Inc()
 	writeHandlingTime.WithLabelValues(write_type, string(outcome)).Observe(time.Since(start_time).Seconds())
+}
+
+func ReportExpiredKey() {
+	expireCounter.Inc()
 }
