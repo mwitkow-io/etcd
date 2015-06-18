@@ -56,8 +56,8 @@ var (
 		prometheus.HistogramOpts{
 			Namespace: "etcd",
 			Subsystem: "http",
-			Name:      "events_handling",
-			Help:      "Bucketed histogram of handling time of successful events (non-watches), by method " +
+			Name:      "events_handling_time_s",
+			Help:      "Bucketed histogram of handling time (s) of successful events (non-watches), by method " +
 			"(GET/PUT etc.) and action  (compareAndSwap, put etc.).",
 			Buckets:   prometheus.ExponentialBuckets(0.0005, 2, 13),
 		}, []string{"method", "action"})

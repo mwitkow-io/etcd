@@ -26,6 +26,7 @@ import (
 	"strings"
 
 	"github.com/coreos/etcd/etcdserver/etcdhttp/httptypes"
+	"time"
 )
 
 // Hop-by-hop headers. These are removed when sent to the backend.
@@ -56,6 +57,7 @@ type reverseProxy struct {
 func (p *reverseProxy) ServeHTTP(rw http.ResponseWriter, clientreq *http.Request) {
 	proxyreq := new(http.Request)
 	*proxyreq = *clientreq
+	startTime := time.Now()
 
 	var (
 		proxybody []byte
@@ -83,6 +85,8 @@ func (p *reverseProxy) ServeHTTP(rw http.ResponseWriter, clientreq *http.Request
 	endpoints := p.director.endpoints()
 	if len(endpoints) == 0 {
 		msg := "proxy: zero endpoints currently available"
+		ReportRequestDropped(clientreq, ZeroEndpoints)
+
 		// TODO: limit the rate of the error logging.
 		log.Printf(msg)
 		e := httptypes.NewHTTPError(http.StatusServiceUnavailable, msg)
@@ -119,6 +123,7 @@ func (p *reverseProxy) ServeHTTP(rw http.ResponseWriter, clientreq *http.Request
 
 		res, err = p.transport.RoundTrip(proxyreq)
 		if err != nil {
+			ReportRequestDropped(clientreq, FailedSendingRequest)
 			log.Printf("proxy: failed to direct request to %s: %v", ep.URL.String(), err)
 			ep.Failed()
 			continue
@@ -130,6 +135,7 @@ func (p *reverseProxy) ServeHTTP(rw http.ResponseWriter, clientreq *http.Request
 	if res == nil {
 		// TODO: limit the rate of the error logging.
 		msg := fmt.Sprintf("proxy: unable to get response from %d endpoint(s)", len(endpoints))
+		ReportRequestDropped(clientreq, FailedGettingResponse)
 		log.Printf(msg)
 		e := httptypes.NewHTTPError(http.StatusBadGateway, msg)
 		e.WriteTo(rw)
@@ -137,7 +143,7 @@ func (p *reverseProxy) ServeHTTP(rw http.ResponseWriter, clientreq *http.Request
 	}
 
 	defer res.Body.Close()
-
+	ReportRequestHandled(clientreq, res, startTime)
 	removeSingleHopHeaders(&res.Header)
 	copyHeader(rw.Header(), res.Header)
 
