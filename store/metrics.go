@@ -16,12 +16,11 @@ package store
 
 import (
 	"github.com/coreos/etcd/Godeps/_workspace/src/github.com/prometheus/client_golang/prometheus"
-	"time"
 )
 
 // Set of raw Prometheus metrics.
 // Labels
-// * type = declared in event.go
+// * action = declared in event.go
 // * outcome = Outcome
 // Do not increment directly, use Report* methods.
 var (
@@ -30,17 +29,17 @@ var (
 			Namespace: "etcd",
 			Subsystem: "store",
 			Name:      "reads",
-			Help:      "Counter of reads type by (get/getRecursive), outcome (success/failure).",
-		}, []string{"type", "outcome"})
+			Help:      "Counter of reads action by (get/getRecursive), outcome (success/failure).",
+		}, []string{"action", "outcome"})
 
 	writeCounter = prometheus.NewCounterVec(
 		prometheus.CounterOpts{
 			Namespace: "etcd",
 			Subsystem: "store",
 			Name:      "writes",
-			Help:      "Counter of writes by type (set/delete/update/create/compareAndSwap/compareAndDelete/expire) " +
+			Help:      "Counter of writes by action (set/delete/update/create/compareAndSwap/compareAndDelete/expire)" +
 			"outcome(success/failure).",
-		}, []string{"type", "outcome"})
+		}, []string{"action", "outcome"})
 
 	expireCounter = prometheus.NewCounter(
 		prometheus.CounterOpts {
@@ -86,12 +85,12 @@ func init() {
 	prometheus.MustRegister(watcherCount)
 }
 
-func ReportReadRequest(read_type string, outcome Outcome) {
-	readCounter.WithLabelValues(read_type, string(outcome)).Inc()
+func ReportReadRequest(read_action string, outcome Outcome) {
+	readCounter.WithLabelValues(read_action, string(outcome)).Inc()
 }
 
-func ReportWriteRequest(write_type string, outcome Outcome) {
-	writeCounter.WithLabelValues(write_type, string(outcome)).Inc()
+func ReportWriteRequest(write_action string, outcome Outcome) {
+	writeCounter.WithLabelValues(write_action, string(outcome)).Inc()
 }
 
 func ReportExpiredKey() {
