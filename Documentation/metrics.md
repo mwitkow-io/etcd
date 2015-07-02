@@ -78,6 +78,38 @@ Example Prometheus queries that may be useful from these metrics (across all etc
 
 Abnormally high fsync duration (`fsync_durations_microseconds`) indicates disk issues and might cause the cluster to be unstable.
 
+
+### events
+
+These metrics describe the serving of events (non-watch requests) served by etcd members in non-proxy mode: total 
+incoming requests, request failures and processing latency (inc. RAFT rounds for storage). They are useful for tracking
+ user-generated traffic hitting the etcd cluster . 
+
+All these metrics are prefixed with `etcd_http_events_`
+
+| Name                      | Description                                                                         | Type                   |
+|---------------------------|-----------------------------------------------------------------------------------------|--------------------|
+| requests_total            | Total number of events after parsing and auth.                                      | Counter(method)        |
+| failed_total              | Total number of failed events.                                                      | Counter(method,error)  |
+| handling_duration_seconds | Bucketed handling times of the requests, including RAFT rounds for writes.          | Histogram(method)      |
+
+
+Example Prometheus queries that may be useful from these metrics (across all etcd members):
+ 
+ * `sum(rate(etcd_http_events_failed_total{job="etcd"}[1m]) by (method) / sum(rate(etcd_http_events_received_total{job="etcd"})[1m]) by (method)` 
+    
+    Shows the fraction of events that failed by HTTP method across all members, across a time window of `1m`.
+ 
+ * `sum(rate(etcd_http_events_received_total{job="etcd",method="GET})[1m]) by (method)`
+   `sum(rate(etcd_http_events_received_total{job="etcd",method~="GET})[1m]) by (method)`
+    
+    Shows the rate of successful readonly/write queries across all servers, across a time window of `1m`.
+    
+ * `histogram_quantile(0.9, sum(increase(etcd_http_events_handling_time_seconds_bucket{job="etcd",method="GET"}[5m]) ) by (le))`
+   `histogram_quantile(0.9, sum(increase(etcd_http_events_handling_time_seconds_bucket{job="etcd",method!="GET"}[5m]) ) by (le))`
+    
+    Show the 0.90-tile latency (in seconds) of read/write (respectively) event handling across all members, with a window of `5m`.      
+
 ### snapshot
 
 | Name                                       | Description                                                | Type    |
